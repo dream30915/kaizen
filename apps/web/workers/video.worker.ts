@@ -4,24 +4,32 @@
  *
  * Pipeline:
  * 1. ดึง job จาก queue
- * 2. Process image (rembg + overlay)
- * 3. Generate video (tier1/2/3)
- * 4. Generate TTS voiceover
- * 5. Upload to R2
- * 6. อัปเดต DB
- * 7. ส่งต่อไป post queue
- * 8. แจ้ง Telegram
+ * 2. Process image (overlay)
+ * 3. Generate video (Phaya primary / Creatomate fallback)
+ * 4. TTS voiceover + merge ลงคลิป (เฉพาะเมื่อ ENABLE_TTS=true)
+ * 5. อัปเดต DB
+ * 6. ส่งต่อไป post queue
+ * 7. แจ้ง Telegram
+ *
+ * เปลี่ยนจากเดิม:
+ * - ใช้ supabaseAdmin แทน createClient จาก lib/supabase/server
+ *   (ตัวเดิมเรียก next/headers cookies() → crash นอก Next.js + ลืม await ด้วย)
+ * - parse script ด้วย parseMenuContent (JSON) แทน string parsing
+ * - TTS เดิม gen เสียงแล้วไม่เคย merge เข้าวิดีโอ = จ่ายเงินฟรี
+ *   ตอนนี้: ปิด default, ถ้าเปิด (ENABLE_TTS=true) จะ merge ผ่าน Phaya จริง
  */
 
 import { Worker, Job } from "bullmq";
 import { redisConnection, VideoJobData, postQueue } from "../lib/queue";
 import { processUploadedImage } from "../lib/image";
 import { generateVideo } from "../lib/video";
-import { generateVoiceover, extractHookFromScript } from "../lib/tts";
+import { parseMenuContent } from "../lib/ai";
+import { phayaTTS, phayaMergeAudioVideo } from "../lib/phaya";
 import { uploadToR2 } from "../lib/storage";
-import { extractCaptionParts } from "../lib/social";
 import { notifyJobDone, notifyJobError } from "../lib/notify";
-import { createClient } from "../lib/supabase/server";
+import { supabaseAdmin } from "../lib/supabase/admin";
+
+const ENABLE_TTS = process.env.ENABLE_TTS === "true";
 
 // ----------------------------------------------------------------
 // Worker
@@ -29,35 +37,29 @@ import { createClient } from "../lib/supabase/server";
 const worker = new Worker<VideoJobData>(
   "video-generation",
   async (job: Job<VideoJobData>) => {
-    const {
-      jobId,
-      menuName,
-      menuNameEn,
-      price,
-      description,
-      videoTier,
-      postTo,
-      imageUrls,
-      script,
-    } = job.data;
+    const { jobId, menuName, menuNameEn, price, videoTier, postTo, imageUrls, script } = job.data;
 
     console.log(`[worker] Processing job ${jobId} — ${menuName} (${videoTier})`);
 
     try {
+      // ----------------------------------------
+      // Step 0: Parse content (JSON หรือ legacy text)
+      // ----------------------------------------
+      const content = parseMenuContent(script);
+
       // ----------------------------------------
       // Step 1: Process image
       // ----------------------------------------
       await job.updateProgress(10);
       const primaryImageUrl = imageUrls[0];
 
-      // ดาวน์โหลดรูปจาก R2
       const imgRes = await fetch(primaryImageUrl);
       const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
 
       const processedImg = await processUploadedImage(imgBuffer, {
         menuName,
         price,
-        removeBg: false, // เปิดได้ถ้าต้องการ
+        removeBg: false,
         addOverlay: true,
       });
 
@@ -73,51 +75,55 @@ const worker = new Worker<VideoJobData>(
         menuName,
         menuNameEn,
         price,
-        script,
+        hookText: content.hook,
         tier: videoTier,
       });
+      let finalVideoUrl = videoResult.url;
 
       // ----------------------------------------
-      // Step 3: TTS Voiceover (optional)
+      // Step 3: TTS Voiceover (opt-in: ENABLE_TTS=true)
+      // merge เสียงลงคลิปจริง — ไม่ใช่แค่ gen ทิ้งไว้
       // ----------------------------------------
       await job.updateProgress(60);
-      let audioUrl: string | undefined;
-      try {
-        const hook = extractHookFromScript(script);
-        if (hook) {
-          const audioBuffer = await generateVoiceover(hook, "th");
-          const audioKey = `audio/${jobId}/voiceover.mp3`;
-          audioUrl = await uploadToR2(audioBuffer, audioKey, "audio/mpeg");
+      if (ENABLE_TTS && process.env.PHAYA_API_KEY) {
+        try {
+          const speech = [content.hook, content.body, content.cta]
+            .filter(Boolean)
+            .join(" ")
+            .substring(0, 500);
+          const audioUrl = await phayaTTS({ text: speech });
+          finalVideoUrl = await phayaMergeAudioVideo({
+            videoUrl: videoResult.url,
+            audioUrl,
+          });
+        } catch (err) {
+          console.warn("[worker] TTS/merge failed, using silent video:", err);
         }
-      } catch (err) {
-        console.warn("[worker] TTS failed, skipping:", err);
       }
 
       // ----------------------------------------
       // Step 4: อัปเดต DB
       // ----------------------------------------
       await job.updateProgress(80);
-      const supabase = createClient();
-      await supabase
+      const { error: dbError } = await supabaseAdmin
         .from("jobs")
         .update({
           status: "done",
-          video_url: videoResult.url,
+          video_url: finalVideoUrl,
           updated_at: new Date().toISOString(),
         })
         .eq("id", jobId);
+      if (dbError) console.error("[worker] DB update failed:", dbError);
 
       // ----------------------------------------
       // Step 5: Queue post job
       // ----------------------------------------
-      const { caption, hashtags } = extractCaptionParts(script);
       await postQueue.add("post", {
         jobId,
-        videoUrl: videoResult.url,
+        videoUrl: finalVideoUrl,
         imageUrl: processedUrl,
-        audioUrl,
-        caption,
-        hashtags,
+        caption: content.caption,
+        hashtags: content.hashtags,
         postTo,
         menuName,
       });
@@ -128,7 +134,7 @@ const worker = new Worker<VideoJobData>(
       await notifyJobDone({
         jobId,
         menuName,
-        videoUrl: videoResult.url,
+        videoUrl: finalVideoUrl,
         thumbnailUrl: processedUrl,
         postedTo: postTo,
       });
@@ -136,15 +142,13 @@ const worker = new Worker<VideoJobData>(
       await job.updateProgress(100);
       console.log(`[worker] Job ${jobId} done ✅`);
 
-      return { videoUrl: videoResult.url, processedUrl };
+      return { videoUrl: finalVideoUrl, processedUrl };
     } catch (err: unknown) {
       const error = err instanceof Error ? err.message : "Unknown error";
       console.error(`[worker] Job ${jobId} failed:`, error);
 
-      // อัปเดต DB ว่า error
       try {
-        const supabase = createClient();
-        await supabase
+        await supabaseAdmin
           .from("jobs")
           .update({ status: "error", error_message: error })
           .eq("id", jobId);
@@ -156,10 +160,10 @@ const worker = new Worker<VideoJobData>(
   },
   {
     connection: redisConnection,
-    concurrency: 2, // process 2 jobs พร้อมกัน
+    concurrency: 2,
     limiter: {
       max: 10,
-      duration: 60000, // max 10 jobs/min
+      duration: 60000,
     },
   }
 );
@@ -179,4 +183,4 @@ worker.on("error", (err) => {
   console.error("[worker] Worker error:", err);
 });
 
-console.log("🎬 Video worker started — waiting for jobs...");
+console.log(`🎬 Video worker started — TTS: ${ENABLE_TTS ? "ON" : "OFF"} — waiting for jobs...`);

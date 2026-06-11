@@ -153,3 +153,19 @@ export async function generateFoodVideoPhaya(params: {
   // premium — Sora 2 longer + high quality
   return phayaSora2Video({ imageUrls: [imageUrl], prompt, aspectRatio: "portrait", nFrames: "15" });
 }
+
+// ----------------------------------------------------------------
+// MERGE AUDIO + VIDEO — ใส่เสียงพากย์ลงคลิป
+// ⚠️ ชื่อ endpoint อ้างจากหน้า docs ("Merge Audio-Video") —
+//    ตรวจ path จริงกับ https://phaya.io/docs อีกครั้งก่อนใช้งาน production
+// ----------------------------------------------------------------
+export async function phayaMergeAudioVideo(params: {
+  videoUrl: string;
+  audioUrl: string;
+}): Promise<string> {
+  const res = await api().post("/merge-audio-video/create", {
+    video_url: params.videoUrl,
+    audio_url: params.audioUrl,
+  });
+  return pollStatus("/merge-audio-video/status", res.data.job_id);
+}

@@ -8,7 +8,7 @@
 import { Worker, Job } from "bullmq";
 import { redisConnection } from "../lib/queue";
 import { postToAll } from "../lib/social";
-import { createClient } from "../lib/supabase/server";
+import { supabaseAdmin } from "../lib/supabase/admin";
 
 interface PostJobData {
   jobId: string;
@@ -36,7 +36,7 @@ const worker = new Worker<PostJobData>(
     });
 
     // บันทึกผลลัพธ์ลง DB
-    const supabase = createClient();
+    const supabase = supabaseAdmin;
     for (const result of results) {
       await supabase.from("post_results").insert({
         job_id: jobId,

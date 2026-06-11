@@ -1,11 +1,18 @@
 /**
- * Video Generation Pipeline — 3 Tiers
- * Tier 1: Creatomate (template-based, fast, cheap)
- * Tier 2: Kling AI (AI video from image, best for food)
- * Tier 3: Runway ML Gen-3 (cinematic premium)
+ * Video Generation — provider เดียวเป็นหลัก (MVP discipline)
+ *
+ * Primary : Phaya.io (Thai platform — FFmpeg image-to-video ถูกสุด, Sora 2 สำหรับ tier สูง)
+ * Fallback: Creatomate (เฉพาะเมื่อตั้ง CREATOMATE_API_KEY ไว้)
+ *
+ * เปลี่ยนจากเดิม:
+ * - ถอด Kling AI / Runway ออกจาก pipeline (โค้ดเดิมอยู่ใน git history)
+ *   เหตุผล: integration sprawl — 4 provider ที่ยังไม่ validate สักตัว + ค่า API key ซ้ำซ้อน
+ * - แก้ bug fallback: เดิมถ้า tier1 (Creatomate) fail จะ catch แล้วเรียก Creatomate ซ้ำอีกรอบ
+ * - เปลี่ยน param `script` → `hookText` (รับข้อความ hook ที่ parse แล้ว ไม่ใช่ script ดิบ)
  */
 
 import axios from "axios";
+import { generateFoodVideoPhaya } from "./phaya";
 
 export type VideoTier = "tier1" | "tier2" | "tier3";
 
@@ -13,10 +20,52 @@ export interface VideoResult {
   url: string;
   duration: number;
   tier: VideoTier;
+  provider: "phaya" | "creatomate";
 }
 
 // ----------------------------------------------------------------
-// TIER 1: Creatomate — Template-based video (~10 sec render)
+// generateVideo — entry point เดียว
+// ----------------------------------------------------------------
+export async function generateVideo(params: {
+  imageUrl: string;
+  menuName: string;
+  menuNameEn?: string;
+  price?: string;
+  hookText?: string;
+  tier: VideoTier;
+}): Promise<VideoResult> {
+  const { imageUrl, menuName, menuNameEn, price, hookText, tier } = params;
+
+  const hasPhaya = !!process.env.PHAYA_API_KEY;
+  const hasCreatomate = !!process.env.CREATOMATE_API_KEY;
+
+  // 1) Phaya — primary
+  if (hasPhaya) {
+    try {
+      const phayaTier = tier === "tier1" ? "fast" : tier === "tier2" ? "quality" : "premium";
+      const url = await generateFoodVideoPhaya({ imageUrl, menuName, menuNameEn, tier: phayaTier });
+      return { url, duration: tier === "tier1" ? 10 : 15, tier, provider: "phaya" };
+    } catch (err) {
+      console.error("[video] Phaya failed:", err);
+      if (!hasCreatomate) throw err; // ไม่มี fallback — ส่ง error ขึ้นไปให้ BullMQ retry
+    }
+  }
+
+  // 2) Creatomate — fallback (หรือ primary ถ้าไม่มี PHAYA_API_KEY)
+  if (hasCreatomate) {
+    return generateCreatomateVideo({ imageUrl, menuName, menuNameEn, price, hookText });
+  }
+
+  throw new Error(
+    "ไม่มี video provider — ตั้งค่า PHAYA_API_KEY (แนะนำ) หรือ CREATOMATE_API_KEY ใน .env.local"
+  );
+}
+
+// backward-compat alias (โค้ดเดิมบางจุดเรียก generateVideoAuto)
+export const generateVideoAuto = generateVideo;
+
+// ----------------------------------------------------------------
+// Creatomate — template-based fallback
 // ----------------------------------------------------------------
 const CREATOMATE_API = "https://api.creatomate.com/v1";
 
@@ -25,13 +74,11 @@ export async function generateCreatomateVideo(params: {
   menuName: string;
   menuNameEn?: string;
   price?: string;
-  script: string;
+  hookText?: string;
   templateId?: string;
 }): Promise<VideoResult> {
-  const { imageUrl, menuName, menuNameEn, price, script } = params;
+  const { imageUrl, menuName, menuNameEn, price, hookText } = params;
 
-  // Template ID — ควรสร้าง template บน Creatomate ก่อน
-  // ใช้ default food template ถ้าไม่มี
   const templateId = params.templateId || process.env.CREATOMATE_TEMPLATE_ID;
 
   const modifications: Record<string, string> = {
@@ -39,13 +86,13 @@ export async function generateCreatomateVideo(params: {
     "menu-name-th": menuName,
     "menu-name-en": menuNameEn || "",
     "price-text": price ? `${price} บาท` : "",
-    "caption-text": script.split("\n")[0] || menuName, // ใช้ HOOK จาก script
+    "caption-text": hookText || menuName,
   };
 
   const body = templateId
     ? { template_id: templateId, modifications }
     : {
-        // Fallback: สร้าง render แบบ simple ถ้าไม่มี template
+        // Fallback: render แบบ simple ถ้าไม่มี template
         source: {
           output_format: "mp4",
           width: 1080,
@@ -63,11 +110,11 @@ export async function generateCreatomateVideo(params: {
             },
             {
               type: "text",
-              text: menuName,
-              y: "80%",
+              text: hookText || menuName,
+              y: "75%",
               width: "90%",
               x: "50%",
-              font_size: 72,
+              font_size: 64,
               font_weight: "700",
               color: "#FFFFFF",
               shadow_color: "rgba(0,0,0,0.8)",
@@ -76,7 +123,7 @@ export async function generateCreatomateVideo(params: {
             {
               type: "text",
               text: price ? `฿${price}` : "",
-              y: "88%",
+              y: "85%",
               width: "90%",
               x: "50%",
               font_size: 48,
@@ -97,10 +144,9 @@ export async function generateCreatomateVideo(params: {
   const renders = Array.isArray(res.data) ? res.data : [res.data];
   const render = renders[0];
 
-  // Creatomate renders asynchronously — poll until done
   const videoUrl = await pollCreatomate(render.id);
 
-  return { url: videoUrl, duration: 15, tier: "tier1" };
+  return { url: videoUrl, duration: 15, tier: "tier1", provider: "creatomate" };
 }
 
 async function pollCreatomate(renderId: string, maxAttempts = 60): Promise<string> {
@@ -116,182 +162,4 @@ async function pollCreatomate(renderId: string, maxAttempts = 60): Promise<strin
     if (status === "failed") throw new Error(`Creatomate render failed: ${res.data.error_message}`);
   }
   throw new Error("Creatomate: render timeout");
-}
-
-// ----------------------------------------------------------------
-// TIER 2: Kling AI — AI Video from Image
-// ----------------------------------------------------------------
-export async function generateKlingVideo(params: {
-  imageUrl: string;
-  prompt: string;
-  duration?: 5 | 10;
-}): Promise<VideoResult> {
-  const { imageUrl, prompt, duration = 5 } = params;
-
-  // Kling AI API (image-to-video)
-  const res = await axios.post(
-    "https://api.klingai.com/v1/videos/image2video",
-    {
-      model_name: "kling-v1",
-      image: imageUrl,
-      prompt: `${prompt}, food video, appetizing, high quality, cinematic`,
-      negative_prompt: "blur, low quality, distorted",
-      cfg_scale: 0.5,
-      mode: "std",
-      duration: duration.toString(),
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.KLING_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      timeout: 30000,
-    }
-  );
-
-  const taskId = res.data?.data?.task_id;
-  if (!taskId) throw new Error("Kling AI: no task_id returned");
-
-  const videoUrl = await pollKling(taskId);
-  return { url: videoUrl, duration, tier: "tier2" };
-}
-
-async function pollKling(taskId: string, maxAttempts = 120): Promise<string> {
-  for (let i = 0; i < maxAttempts; i++) {
-    await new Promise((r) => setTimeout(r, 5000));
-
-    const res = await axios.get(
-      `https://api.klingai.com/v1/videos/image2video/${taskId}`,
-      { headers: { Authorization: `Bearer ${process.env.KLING_API_KEY}` } }
-    );
-
-    const { task_status, task_result } = res.data?.data || {};
-    if (task_status === "succeed") {
-      const url = task_result?.videos?.[0]?.url;
-      if (!url) throw new Error("Kling AI: no video URL in result");
-      return url;
-    }
-    if (task_status === "failed") throw new Error(`Kling AI task failed`);
-  }
-  throw new Error("Kling AI: polling timeout");
-}
-
-// ----------------------------------------------------------------
-// TIER 3: Runway ML Gen-3 — Cinematic Premium
-// ----------------------------------------------------------------
-export async function generateRunwayVideo(params: {
-  imageUrl: string;
-  prompt: string;
-}): Promise<VideoResult> {
-  const { imageUrl, prompt } = params;
-
-  const res = await axios.post(
-    "https://api.dev.runwayml.com/v1/image_to_video",
-    {
-      model: "gen3a_turbo",
-      promptImage: imageUrl,
-      promptText: `${prompt}, cinematic food video, professional photography, slow motion`,
-      duration: 5,
-      ratio: "768:1344", // 9:16 vertical
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.RUNWAY_API_KEY}`,
-        "X-Runway-Version": "2024-11-06",
-        "Content-Type": "application/json",
-      },
-      timeout: 30000,
-    }
-  );
-
-  const taskId = res.data?.id;
-  if (!taskId) throw new Error("Runway: no task ID");
-
-  const videoUrl = await pollRunway(taskId);
-  return { url: videoUrl, duration: 5, tier: "tier3" };
-}
-
-async function pollRunway(taskId: string, maxAttempts = 120): Promise<string> {
-  for (let i = 0; i < maxAttempts; i++) {
-    await new Promise((r) => setTimeout(r, 5000));
-
-    const res = await axios.get(
-      `https://api.dev.runwayml.com/v1/tasks/${taskId}`,
-      { headers: { Authorization: `Bearer ${process.env.RUNWAY_API_KEY}`, "X-Runway-Version": "2024-11-06" } }
-    );
-
-    const { status, output, failure } = res.data;
-    if (status === "SUCCEEDED") return output?.[0];
-    if (status === "FAILED") throw new Error(`Runway failed: ${failure}`);
-  }
-  throw new Error("Runway: polling timeout");
-}
-
-// ----------------------------------------------------------------
-// generateVideo — entry point พร้อม fallback
-// Tier 1 → ถ้า fail → tier 1 ใหม่ (ไม่ fallback ขึ้น tier สูงกว่า)
-// ----------------------------------------------------------------
-export async function generateVideo(params: {
-  imageUrl: string;
-  menuName: string;
-  menuNameEn?: string;
-  price?: string;
-  script: string;
-  tier: VideoTier;
-}): Promise<VideoResult> {
-  const { imageUrl, menuName, menuNameEn, price, script, tier } = params;
-
-  try {
-    if (tier === "tier1") {
-      return await generateCreatomateVideo({ imageUrl, menuName, menuNameEn, price, script });
-    }
-    if (tier === "tier2") {
-      return await generateKlingVideo({
-        imageUrl,
-        prompt: `${menuName} ${menuNameEn || ""}, delicious Japanese food, steam rising`,
-      });
-    }
-    if (tier === "tier3") {
-      return await generateRunwayVideo({
-        imageUrl,
-        prompt: `${menuName}, premium Japanese cuisine, cinematic`,
-      });
-    }
-    throw new Error(`Unknown video tier: ${tier}`);
-  } catch (err) {
-    console.error(`[video] Tier ${tier} failed, falling back to tier1:`, err);
-    // Fallback to tier1 if higher tier fails
-    return await generateCreatomateVideo({ imageUrl, menuName, menuNameEn, price, script });
-  }
-}
-
-// ----------------------------------------------------------------
-// generateVideoAuto — ใช้ phaya.io เป็น primary, fallback เดิม
-// ----------------------------------------------------------------
-import { generateFoodVideoPhaya } from "@/lib/phaya";
-
-export async function generateVideoAuto(params: {
-  imageUrl: string;
-  menuName: string;
-  menuNameEn?: string;
-  price?: string;
-  script: string;
-  tier: VideoTier;
-}): Promise<VideoResult> {
-  const { imageUrl, menuName, menuNameEn, tier } = params;
-
-  // ถ้ามี PHAYA_API_KEY ใช้ phaya ก่อน
-  if (process.env.PHAYA_API_KEY) {
-    try {
-      const phayaTier =
-        tier === "tier1" ? "fast" : tier === "tier2" ? "quality" : "premium";
-      const url = await generateFoodVideoPhaya({ imageUrl, menuName, menuNameEn, tier: phayaTier });
-      return { url, duration: tier === "tier1" ? 10 : 15, tier };
-    } catch (err) {
-      console.warn("[video] Phaya failed, falling back:", err);
-    }
-  }
-
-  // Fallback: เดิม (Creatomate / Kling / Runway)
-  return generateVideo(params);
 }

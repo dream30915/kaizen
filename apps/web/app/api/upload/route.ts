@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { generateMenuScript } from "@/lib/ai";
+import { generateMenuContent } from "@/lib/ai";
 import { uploadToR2 } from "@/lib/storage";
 import { addVideoJob } from "@/lib/queue";
 import { createClient } from "@/lib/supabase/server";
@@ -68,12 +68,13 @@ export async function POST(req: NextRequest) {
 
     // Step 2: Generate AI script
     const { menuName, menuNameEn, price, description, videoTier, postTo, scheduleAt } = parsed.data;
-    const script = await generateMenuScript({
+    const content = await generateMenuContent({
       menuName,
       menuNameEn,
       price,
       description,
     });
+    const script = JSON.stringify(content); // เก็บลงคอลัมน์ script เดิมเป็น JSON string
 
     // Step 3: Save job to Supabase
     const supabase = await createClient();
@@ -92,8 +93,13 @@ export async function POST(req: NextRequest) {
     });
 
     if (dbError) {
+      // Fail fast — ถ้า insert ไม่ผ่านแล้วปล่อย job เข้า queue ต่อ
+      // worker จะ update แถวที่ไม่มีอยู่จริง → job หายจาก dashboard เงียบ ๆ
       console.error("DB insert error:", dbError);
-      // Don't fail — job still queued
+      return NextResponse.json(
+        { message: `บันทึก job ลงฐานข้อมูลไม่สำเร็จ: ${dbError.message}` },
+        { status: 500 }
+      );
     }
 
     // Step 4: Add to BullMQ queue
@@ -114,6 +120,7 @@ export async function POST(req: NextRequest) {
       success: true,
       jobId,
       script,
+      content,
       imageUrls,
       message: "Job queued successfully",
     });

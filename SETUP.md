@@ -27,7 +27,17 @@ npm install   # หรือ yarn / pnpm install
 
 # 6. Start dev server
 npm run dev
+
+# 7. (เทอร์มินัลแยก) Start workers — จำเป็น! ไม่งั้นคลิปไม่ถูกสร้าง
+cd apps/web
+npm run workers
 ```
+
+### Env ขั้นต่ำที่ต้องใส่ก่อนเทสต์คลิปแรก
+`SUPABASE_*` (3 ค่า), `OPENAI_API_KEY`, `PHAYA_API_KEY`, `R2_*` (5 ค่า), `REDIS_URL`
+
+### ก่อน deploy ขึ้น VPS
+ต้องตั้ง `BASIC_AUTH_USER` / `BASIC_AUTH_PASSWORD` — ถ้าไม่ตั้ง แอพจะ block ตัวเอง (503) ใน production โดยตั้งใจ
 
 เปิดเบราว์เซอร์: http://localhost:3000
 

@@ -60,7 +60,7 @@ export function extractHookFromScript(script: string): string {
 // ----------------------------------------------------------------
 // generateVoiceoverPhaya — ใช้ phaya.io TTS ภาษาไทย
 // ----------------------------------------------------------------
-import { phayaTTS } from "@/lib/phaya";
+import { phayaTTS } from "./phaya";
 import https from "https";
 
 export async function generateVoiceoverPhaya(text: string): Promise<Buffer> {

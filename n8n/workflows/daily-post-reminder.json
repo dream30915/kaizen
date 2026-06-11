@@ -1,0 +1,57 @@
+{
+  "name": "Kaizen — Daily Post Reminder (10:00)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 10 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-daily",
+      "name": "ทุกวัน 10:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.NEXT_PUBLIC_APP_URL}}/api/menus",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {}
+      },
+      "id": "get-menus",
+      "name": "ดึงรายการเมนู",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "chatId": "={{$env.TELEGRAM_OWNER_CHAT_ID}}",
+        "text": "🍱 ถึงเวลาโพสต์คอนเทนต์วันนี้แล้ว!\n\nเข้าไปอัพรูปเมนูได้ที่:\n{{$env.NEXT_PUBLIC_APP_URL}}/upload",
+        "additionalFields": {}
+      },
+      "id": "telegram-remind",
+      "name": "Telegram: เตือนเจ้าของร้าน",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "ทุกวัน 10:00": {
+      "main": [[{ "node": "ดึงรายการเมนู", "type": "main", "index": 0 }]]
+    },
+    "ดึงรายการเมนู": {
+      "main": [[{ "node": "Telegram: เตือนเจ้าของร้าน", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false
+}
