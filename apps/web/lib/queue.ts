@@ -1,12 +1,16 @@
-import { Queue, Worker, Job } from "bullmq";
-import IORedis from "ioredis";
+import { Queue, Job } from "bullmq";
 
 // ----------------------------------------------------------------
-// Redis Connection
+// Redis Connection — ใช้ connection object เพื่อหลีกเลี่ยง ioredis version conflict
 // ----------------------------------------------------------------
-const redisConnection = new IORedis(process.env.REDIS_URL || "redis://localhost:6379", {
-  maxRetriesPerRequest: null,
-});
+const redisConnection = {
+  host: (() => {
+    try { return new URL(process.env.REDIS_URL || "redis://localhost:6379").hostname; } catch { return "localhost"; }
+  })(),
+  port: (() => {
+    try { return parseInt(new URL(process.env.REDIS_URL || "redis://localhost:6379").port || "6379"); } catch { return 6379; }
+  })(),
+};
 
 // ----------------------------------------------------------------
 // Job Types
@@ -32,8 +36,8 @@ export const videoQueue = new Queue<VideoJobData>("video-generation", {
   defaultJobOptions: {
     attempts: 3,
     backoff: { type: "exponential", delay: 5000 },
-    removeOnComplete: { age: 86400 }, // เก็บ 24 ชั่วโมง
-    removeOnFail: { age: 604800 },   // เก็บ 7 วัน
+    removeOnComplete: { age: 86400 },
+    removeOnFail: { age: 604800 },
   },
 });
 
@@ -46,7 +50,7 @@ export const postQueue = new Queue("social-post", {
 });
 
 // ----------------------------------------------------------------
-// addVideoJob — เพิ่ม job เข้า queue
+// addVideoJob
 // ----------------------------------------------------------------
 export async function addVideoJob(data: VideoJobData): Promise<Job> {
   const delay = data.scheduleAt
@@ -61,7 +65,7 @@ export async function addVideoJob(data: VideoJobData): Promise<Job> {
 }
 
 // ----------------------------------------------------------------
-// getQueueStats — สถานะ queue สำหรับ dashboard
+// getQueueStats
 // ----------------------------------------------------------------
 export async function getQueueStats() {
   const [waiting, active, completed, failed] = await Promise.all([

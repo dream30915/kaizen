@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
     });
 
     // Step 3: Save job to Supabase
-    const supabase = createClient();
+    const supabase = await createClient();
     const { error: dbError } = await supabase.from("jobs").insert({
       id: jobId,
       menu_name: menuName,

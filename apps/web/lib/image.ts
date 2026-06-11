@@ -5,14 +5,16 @@
  * 3. Sharp — resize, overlay text, format conversion
  */
 
-import * as fal from "@fal-ai/client";
+import { fal } from "@fal-ai/client";
 import axios from "axios";
 import sharp from "sharp";
 
 // ----------------------------------------------------------------
-// Config
+// Config — fal.ai v1 client
 // ----------------------------------------------------------------
-fal.config({ credentials: process.env.FAL_KEY });
+if (process.env.FAL_KEY) {
+  fal.config({ credentials: process.env.FAL_KEY });
+}
 
 const REMBG_URL = process.env.REMBG_URL || "http://localhost:7000";
 
@@ -44,7 +46,7 @@ export async function generateFoodImage(
       ? `Professional food photography of ${menuName}, Japanese restaurant, top-down view, high quality, appetizing, natural lighting, on elegant plate`
       : `Artistic illustration of ${menuName}, Japanese food art style, vibrant colors, menu design`;
 
-  const result = await fal.run("fal-ai/flux-pro", {
+  const result = await fal.subscribe("fal-ai/flux-pro", {
     input: {
       prompt,
       image_size: "landscape_4_3",
@@ -55,7 +57,7 @@ export async function generateFoodImage(
     },
   });
 
-  const image = (result as any).images?.[0];
+  const image = (result.data as any)?.images?.[0];
   if (!image) throw new Error("fal.ai: no image returned");
 
   return {
@@ -70,7 +72,7 @@ export async function generateFoodImage(
 // ----------------------------------------------------------------
 export async function removeBackground(imageBuffer: Buffer): Promise<Buffer> {
   const formData = new FormData();
-  const blob = new Blob([imageBuffer], { type: "image/jpeg" });
+  const blob = new Blob([imageBuffer as unknown as BlobPart], { type: "image/jpeg" });
   formData.append("file", blob, "image.jpg");
 
   const res = await axios.post(`${REMBG_URL}/api/remove`, formData, {
