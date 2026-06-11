@@ -6,7 +6,7 @@ import { Toaster } from "sonner";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Kaizen — Menu-to-Video Platform",
+  title: "Zenkai — AI Content Studio",
   description: "ระบบสร้างวิดีโอเมนูอาหารอัตโนมัติสำหรับร้านอาหารญี่ปุ่น",
 };
 

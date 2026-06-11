@@ -1,7 +1,7 @@
 import JobList from "@/components/dashboard/JobList";
 
 export const metadata = {
-  title: "งานทั้งหมด — Kaizen",
+  title: "งานทั้งหมด — Zenkai",
 };
 
 export default function JobsPage() {

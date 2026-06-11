@@ -1,6 +1,6 @@
 import MenuCatalog from "@/components/menus/MenuCatalog";
 
-export const metadata = { title: "คลังเมนู — Kaizen" };
+export const metadata = { title: "คลังเมนู — Zenkai" };
 
 export default function MenusPage() {
   return (

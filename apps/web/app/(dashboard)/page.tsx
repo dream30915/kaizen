@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Upload, BookOpen, Briefcase, BarChart2, Sparkles, Zap, Globe } from "lucide-react";
 
-export const metadata = { title: "改善 Kaizen — Menu-to-Video Platform" };
+export const metadata = { title: "全開 Zenkai — Menu-to-Video Platform" };
 
 const QUICK_ACTIONS = [
   {
@@ -63,10 +63,10 @@ export default function DashboardHome() {
       <div className="mb-10">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-sakura-50 border border-sakura-200 rounded-full text-xs font-medium text-sakura-600 mb-4">
           <span className="w-1.5 h-1.5 bg-sakura-500 rounded-full animate-pulse" />
-          Powered by phaya.io · Sora 2 · GPT-4o
+          🍣 AI สร้างคอนเทนต์ร้านอาหารญี่ปุ่น
         </div>
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          改善 Kaizen
+          全開 Zenkai
         </h1>
         <p className="text-gray-500 text-lg">
           ถ่ายรูปอาหาร → AI สร้างวิดีโอ → โพสต์ทุกแพลตฟอร์มอัตโนมัติ

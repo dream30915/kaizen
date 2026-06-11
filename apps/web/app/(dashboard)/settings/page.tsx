@@ -1,6 +1,6 @@
 import SettingsForm from "@/components/settings/SettingsForm";
 
-export const metadata = { title: "ตั้งค่า — Kaizen" };
+export const metadata = { title: "ตั้งค่า — Zenkai" };
 
 export default function SettingsPage() {
   return (

@@ -1,6 +1,6 @@
 import AnalyticsDashboard from "@/components/analytics/AnalyticsDashboard";
 
-export const metadata = { title: "Analytics — Kaizen" };
+export const metadata = { title: "Analytics — Zenkai" };
 
 export default function AnalyticsPage() {
   return (

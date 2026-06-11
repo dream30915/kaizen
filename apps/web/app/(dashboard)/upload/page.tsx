@@ -1,7 +1,7 @@
 import MenuUploader from "@/components/upload/MenuUploader";
 
 export const metadata = {
-  title: "อัปโหลดเมนู — Kaizen",
+  title: "อัปโหลดเมนู — Zenkai",
 };
 
 export default function UploadPage() {
