@@ -143,7 +143,7 @@ export default function GuidePage() {
       <div className="bg-sakura-50 border border-sakura-100 rounded-2xl p-6 text-center">
         <p className="text-2xl mb-2">🍣</p>
         <p className="font-semibold text-gray-900">พร้อมสร้างคลิปแรกแล้ว!</p>
-        <p className="text-sm text-gray-500 mt-1">กดปุ่ม "สร้างวิดีโอ" ในเมนูซ้ายได้เลย</p>
+        <p className="text-sm text-gray-500 mt-1">กดปุ่ม สร้างวิดีโอ ในเมนูซ้ายได้เลย</p>
       </div>
     </div>
   );
