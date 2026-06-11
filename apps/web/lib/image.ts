@@ -84,6 +84,15 @@ export async function removeBackground(imageBuffer: Buffer): Promise<Buffer> {
   return Buffer.from(res.data);
 }
 
+// escape ข้อความก่อนฝังลง SVG — กันชื่อเมนูที่มี & < > " ทำให้ SVG พัง
+function escapeXml(t: string): string {
+  return t
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 // ----------------------------------------------------------------
 // addTextOverlay — ใส่ข้อความบนรูป (ชื่อเมนู + ราคา)
 // ----------------------------------------------------------------
@@ -119,21 +128,21 @@ export async function addTextOverlay(
         x="${w / 2}"
         y="${position === "bottom" ? h - 60 : 80}"
         text-anchor="middle"
-        font-family="Arial, Helvetica, sans-serif"
+        font-family="'Noto Sans Thai', 'Loma', 'Garuda', 'Sarabun', sans-serif"
         font-size="${Math.floor(w * 0.055)}px"
         font-weight="bold"
         fill="white"
-      >${menuName}</text>
+      >${escapeXml(menuName)}</text>
       ${
         price
           ? `<text
         x="${w / 2}"
         y="${position === "bottom" ? h - 20 : 120}"
         text-anchor="middle"
-        font-family="Arial, Helvetica, sans-serif"
+        font-family="'Noto Sans Thai', 'Loma', 'Garuda', 'Sarabun', sans-serif"
         font-size="${Math.floor(w * 0.035)}px"
         fill="#FFD700"
-      >${price} บาท</text>`
+      >${escapeXml(price)} บาท</text>`
           : ""
       }
     </svg>`;
@@ -200,9 +209,10 @@ export async function processUploadedImage(
     });
   }
 
-  // 3. Normalize size
+  // 3. Normalize เป็นแนวตั้ง 9:16 (1080x1920) สำหรับ TikTok/Reels/Shorts
+  // (เดิมเป็น 1080x1080 → คลิปออกมาจัตุรัส ไม่เหมาะกับแพลตฟอร์มคลิปสั้น)
   processed = await sharp(processed)
-    .resize(1080, 1080, { fit: "cover" })
+    .resize(1080, 1920, { fit: "cover" })
     .jpeg({ quality: 88 })
     .toBuffer();
 

@@ -40,6 +40,14 @@ if ! command -v node >/dev/null 2>&1 || [ "$(node -v | cut -d. -f1 | tr -d v)" -
 fi
 
 # ------------------------------------------------------------
+# 2.5 ฟอนต์ไทย — จำเป็นสำหรับ text overlay บนรูป/คลิป
+# ------------------------------------------------------------
+if ! fc-list :lang=th 2>/dev/null | grep -q .; then
+  log "ติดตั้งฟอนต์ไทย..."
+  $SUDO apt-get update -qq && $SUDO apt-get install -y fonts-thai-tlwg fontconfig
+fi
+
+# ------------------------------------------------------------
 # 3. Clone / Pull repo
 # ------------------------------------------------------------
 if [ -d "$APP_DIR/.git" ]; then

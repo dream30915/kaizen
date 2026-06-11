@@ -55,3 +55,23 @@ git apply kaizen-fixes.patch
 | NEXT-STEPS.md | checklist สิ่งที่เหลือ (สมัครบริการ + ใส่ key) |
 
 ตรวจแล้ว: `npm audit` 0 vulnerabilities, `tsc` clean, `next build` ผ่านไม่มี Redis noise
+
+---
+
+# รอบ 3 — เทสต์ของจริงกับ Phaya API ✅ (11 มิ.ย. 2026)
+
+ผลเทสต์ end-to-end ด้วย API key จริง:
+
+| เทสต์ | ผล |
+|---|---|
+| ฟอนต์ไทยบน overlay (sharp) | ✅ สระ/วรรณยุกต์ครบ — แก้ font-family เป็น Noto Sans Thai/Loma + escape XML กันชื่อเมนูมี `&` |
+| Image-to-Video (FFmpeg) | ✅ h264 เสร็จใน 3.5 วิ ข้อความไทยในคลิปคมชัด |
+| TTS เสียงไทย | ✅ endpoint จริง: `POST /text-to-speech/generate {prompt}` → poll `/text-to-speech/status/{id}` |
+| Merge เสียงลงคลิป | ✅ endpoint จริง: `POST /media/merge-audio-video` → poll `/media/status/{id}` ได้คลิป h264+aac |
+
+แก้เพิ่มจากผลเทสต์:
+- `image.ts`: ฟอนต์ไทย + escapeXml + output 9:16 (1080x1920) แทนจัตุรัส
+- `phaya.ts`: แก้ TTS/merge endpoints เป็นของจริงที่ยืนยันแล้ว, pollStatus รองรับ status ตัวพิมพ์ใหญ่
+- `deploy/vps-setup.sh`: ติดตั้ง fonts-thai-tlwg อัตโนมัติ
+
+→ `ENABLE_TTS=true` พร้อมใช้ production ได้เลย

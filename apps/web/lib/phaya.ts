@@ -32,10 +32,11 @@ async function pollStatus(
     await new Promise((r) => setTimeout(r, intervalMs));
     const res = await api().get(`${endpoint}/${jobId}`);
     const { status, video_url, image_url, audio_url } = res.data;
-    if (status === "completed") {
+    const st = String(status || "").toLowerCase();
+    if (st === "completed") {
       return video_url || image_url || audio_url || "";
     }
-    if (status === "failed") throw new Error(`Phaya job failed: ${jobId}`);
+    if (st === "failed") throw new Error(`Phaya job failed: ${jobId}`);
   }
   throw new Error("Phaya: polling timeout");
 }
@@ -102,14 +103,14 @@ export async function phayaTextToImage(params: {
 // ----------------------------------------------------------------
 export async function phayaTTS(params: {
   text: string;
-  voice?: string; // Thai voice ID
-  speed?: number;
+  voice?: string;
 }): Promise<string> {
-  const { text, voice, speed = 1.0 } = params;
-  const body: Record<string, unknown> = { text, speed };
-  if (voice) body.voice_id = voice;
+  // endpoint ยืนยันกับ API จริงแล้ว: POST /text-to-speech/generate {prompt}
+  // → poll /text-to-speech/status/{job_id} → audio_url (.wav)
+  const body: Record<string, unknown> = { prompt: params.text };
+  if (params.voice) body.voice = params.voice;
 
-  const res = await api().post("/text-to-speech/create", body);
+  const res = await api().post("/text-to-speech/generate", body);
   return pollStatus("/text-to-speech/status", res.data.job_id, 30, 2000);
 }
 
@@ -163,11 +164,11 @@ export async function phayaMergeAudioVideo(params: {
   videoUrl: string;
   audioUrl: string;
 }): Promise<string> {
-  // path ปรับได้ผ่าน env เผื่อ docs จริงใช้ชื่ออื่น (เช่น media/merge-audio-video)
-  const mergePath = process.env.PHAYA_MERGE_PATH || "merge-audio-video";
-  const res = await api().post(`/${mergePath}/create`, {
+  // endpoint ยืนยันกับ API จริงแล้ว: POST /media/merge-audio-video
+  // {video_url, audio_url} → poll /media/status/{job_id} → video_url
+  const res = await api().post("/media/merge-audio-video", {
     video_url: params.videoUrl,
     audio_url: params.audioUrl,
   });
-  return pollStatus(`/${mergePath}/status`, res.data.job_id);
+  return pollStatus("/media/status", res.data.job_id);
 }
