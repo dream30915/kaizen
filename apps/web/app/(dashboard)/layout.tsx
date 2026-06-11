@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Upload, BookOpen, Briefcase, BarChart2, Settings, ChefHat } from "lucide-react";
+import { Home, Upload, BookOpen, Briefcase, BarChart2, Settings, ChefHat, HelpCircle } from "lucide-react";
 import { clsx } from "clsx";
 
 const navItems = [
@@ -12,6 +12,7 @@ const navItems = [
   { href: "/jobs", icon: Briefcase, label: "งานทั้งหมด" },
   { href: "/analytics", icon: BarChart2, label: "Analytics" },
   { href: "/settings", icon: Settings, label: "ตั้งค่า" },
+  { href: "/guide", icon: HelpCircle, label: "วิธีใช้งาน" },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
