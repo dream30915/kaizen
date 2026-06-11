@@ -31,23 +31,39 @@ export interface VideoJobData {
 // ----------------------------------------------------------------
 // Queues
 // ----------------------------------------------------------------
-export const videoQueue = new Queue<VideoJobData>("video-generation", {
-  connection: redisConnection,
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: { type: "exponential", delay: 5000 },
-    removeOnComplete: { age: 86400 },
-    removeOnFail: { age: 604800 },
-  },
-});
+// Lazy-init: สร้าง Queue ตอนถูกเรียกใช้ครั้งแรก ไม่ใช่ตอน import
+// (เดิมสร้างตอน import → next build พยายามต่อ Redis ตอน collect page data
+//  ทำให้มี ECONNREFUSED noise และอาจ build fail บน CI ที่ไม่มี Redis)
+let _videoQueue: Queue<VideoJobData> | null = null;
+let _postQueue: Queue | null = null;
 
-export const postQueue = new Queue("social-post", {
-  connection: redisConnection,
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: { type: "exponential", delay: 10000 },
-  },
-});
+export function getVideoQueue(): Queue<VideoJobData> {
+  if (!_videoQueue) {
+    _videoQueue = new Queue<VideoJobData>("video-generation", {
+      connection: redisConnection,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: { type: "exponential", delay: 5000 },
+        removeOnComplete: { age: 86400 },
+        removeOnFail: { age: 604800 },
+      },
+    });
+  }
+  return _videoQueue;
+}
+
+export function getPostQueue(): Queue {
+  if (!_postQueue) {
+    _postQueue = new Queue("social-post", {
+      connection: redisConnection,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: { type: "exponential", delay: 10000 },
+      },
+    });
+  }
+  return _postQueue;
+}
 
 // ----------------------------------------------------------------
 // addVideoJob
@@ -57,7 +73,7 @@ export async function addVideoJob(data: VideoJobData): Promise<Job> {
     ? Math.max(0, new Date(data.scheduleAt).getTime() - Date.now())
     : 0;
 
-  return videoQueue.add("generate", data, {
+  return getVideoQueue().add("generate", data, {
     jobId: data.jobId,
     delay,
     priority: data.videoTier === "tier1" ? 1 : data.videoTier === "tier2" ? 2 : 3,
@@ -68,11 +84,12 @@ export async function addVideoJob(data: VideoJobData): Promise<Job> {
 // getQueueStats
 // ----------------------------------------------------------------
 export async function getQueueStats() {
+  const q = getVideoQueue();
   const [waiting, active, completed, failed] = await Promise.all([
-    videoQueue.getWaitingCount(),
-    videoQueue.getActiveCount(),
-    videoQueue.getCompletedCount(),
-    videoQueue.getFailedCount(),
+    q.getWaitingCount(),
+    q.getActiveCount(),
+    q.getCompletedCount(),
+    q.getFailedCount(),
   ]);
   return { waiting, active, completed, failed };
 }

@@ -20,7 +20,7 @@
  */
 
 import { Worker, Job } from "bullmq";
-import { redisConnection, VideoJobData, postQueue } from "../lib/queue";
+import { redisConnection, VideoJobData, getPostQueue } from "../lib/queue";
 import { processUploadedImage } from "../lib/image";
 import { generateVideo } from "../lib/video";
 import { parseMenuContent } from "../lib/ai";
@@ -118,7 +118,7 @@ const worker = new Worker<VideoJobData>(
       // ----------------------------------------
       // Step 5: Queue post job
       // ----------------------------------------
-      await postQueue.add("post", {
+      await getPostQueue().add("post", {
         jobId,
         videoUrl: finalVideoUrl,
         imageUrl: processedUrl,

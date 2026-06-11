@@ -163,9 +163,11 @@ export async function phayaMergeAudioVideo(params: {
   videoUrl: string;
   audioUrl: string;
 }): Promise<string> {
-  const res = await api().post("/merge-audio-video/create", {
+  // path ปรับได้ผ่าน env เผื่อ docs จริงใช้ชื่ออื่น (เช่น media/merge-audio-video)
+  const mergePath = process.env.PHAYA_MERGE_PATH || "merge-audio-video";
+  const res = await api().post(`/${mergePath}/create`, {
     video_url: params.videoUrl,
     audio_url: params.audioUrl,
   });
-  return pollStatus("/merge-audio-video/status", res.data.job_id);
+  return pollStatus(`/${mergePath}/status`, res.data.job_id);
 }

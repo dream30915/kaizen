@@ -41,3 +41,17 @@ cd kaizen
 git apply kaizen-fixes.patch
 # หรือแตก zip ทับ (path ตรงกับ repo)
 ```
+
+---
+
+# รอบ 2 — 11 มิ.ย. 2026 (เย็น)
+
+| สิ่งที่ทำ | รายละเอียด |
+|---|---|
+| แก้ช่องโหว่ครบ | `npm audit` 4 → **0**: อัปเกรด @supabase/ssr 0.12, next 15.5.19, override postcss ≥8.5.10 |
+| Queue lazy-init | เดิมสร้าง BullMQ Queue ตอน import → build/CI ที่ไม่มี Redis จะ error noise |
+| ยืนยัน Phaya docs | base URL + image-to-video ตรงเป๊ะ, merge path ปรับได้ผ่าน `PHAYA_MERGE_PATH` |
+| Deploy script | `deploy/vps-setup.sh` — คำสั่งเดียวติดตั้งครบบน VPS (Docker, Node, build, systemd) รันซ้ำ = update |
+| NEXT-STEPS.md | checklist สิ่งที่เหลือ (สมัครบริการ + ใส่ key) |
+
+ตรวจแล้ว: `npm audit` 0 vulnerabilities, `tsc` clean, `next build` ผ่านไม่มี Redis noise
