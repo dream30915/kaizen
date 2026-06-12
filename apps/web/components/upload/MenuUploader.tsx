@@ -49,14 +49,14 @@ const VIDEO_TIERS = [
   {
     value: "tier2",
     label: "AI Video",
-    desc: "Phaya Sora 2 — AI video จากรูปอาหาร",
+    desc: "Phaya Veo 3.1 — Google AI จากรูปอาหาร (15 เครดิต)",
     badge: "✨ Quality",
     badgeColor: "bg-purple-100 text-purple-700",
   },
   {
     value: "tier3",
     label: "Cinematic",
-    desc: "Phaya Sora 2 (ยาวขึ้น) — premium สุด",
+    desc: "Phaya Veo 3.1 ยาวขึ้น — premium สุด (15+ เครดิต)",
     badge: "🎬 Premium",
     badgeColor: "bg-amber-100 text-amber-700",
   },
