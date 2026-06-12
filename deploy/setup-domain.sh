@@ -2,13 +2,13 @@
 # ============================================================
 # Zenkai — Domain + HTTPS Setup
 # รันบน VPS หลังจาก DNS A record ชี้มาที่ 72.61.125.87 แล้ว
-# ใช้: bash /opt/kaizen/deploy/setup-domain.sh
+# ใช้: bash /opt/zenkai/deploy/setup-domain.sh
 # ============================================================
 set -euo pipefail
 
 DOMAIN="zenkai.dumpsc.com"
 EMAIL="dream30915@gmail.com"   # <-- เปลี่ยนเป็นอีเมลจริงก่อนรัน
-ENV="/opt/kaizen/apps/web/.env.local"
+ENV="/opt/zenkai/apps/web/.env.local"
 
 log() { echo -e "\n\033[1;32m▶ $1\033[0m"; }
 
@@ -67,9 +67,9 @@ sed -i "s|NEXT_PUBLIC_APP_URL=.*|NEXT_PUBLIC_APP_URL=https://$DOMAIN|" $ENV
 
 # ── 6. Rebuild + Restart ─────────────────────────────────────
 log "Rebuild เว็บ..."
-cd /opt/kaizen/apps/web
+cd /opt/zenkai/apps/web
 npm run build
-systemctl restart kaizen-web
+systemctl restart zenkai-web
 
 log "เสร็จแล้ว! 🎉"
 echo ""

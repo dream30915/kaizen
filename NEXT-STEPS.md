@@ -14,9 +14,9 @@ Supabase Dashboard → SQL Editor → วางเนื้อหาไฟล์
 ## 3. Deploy บน VPS (ตอนถึงคอม — copy ทีละบรรทัด)
 ```bash
 ssh root@IP_ของ_VPS
-curl -fsSL https://raw.githubusercontent.com/dream30915/kaizen/main/deploy/vps-setup.sh | bash
-nano /opt/kaizen/apps/web/.env.local   # ใส่ key จากข้อ 1
-bash /opt/kaizen/deploy/vps-setup.sh   # รันซ้ำ → ระบบออนไลน์
+curl -fsSL https://raw.githubusercontent.com/dream30915/zenkai/main/deploy/vps-setup.sh | bash
+nano /opt/zenkai/apps/web/.env.local   # ใส่ key จากข้อ 1
+bash /opt/zenkai/deploy/vps-setup.sh   # รันซ้ำ → ระบบออนไลน์
 ```
 
 ## 4. เทสต์คลิปแรก

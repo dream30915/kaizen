@@ -3,7 +3,7 @@
 # Kaizen — VPS Production Setup (Ubuntu 22.04/24.04)
 # รันบน VPS ครั้งเดียว ติดตั้งทุกอย่างจนระบบออนไลน์:
 #
-#   curl -fsSL https://raw.githubusercontent.com/dream30915/kaizen/main/deploy/vps-setup.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/dream30915/zenkai/main/deploy/vps-setup.sh | bash
 #
 # หรือถ้า clone แล้ว:  bash deploy/vps-setup.sh
 #
@@ -11,8 +11,8 @@
 # ============================================================
 set -euo pipefail
 
-APP_DIR="/opt/kaizen"
-REPO_URL="https://github.com/dream30915/kaizen.git"
+APP_DIR="/opt/zenkai"
+REPO_URL="https://github.com/dream30915/zenkai.git"
 WEB_PORT=3000
 
 log() { echo -e "\n\033[1;32m▶ $1\033[0m"; }
@@ -101,7 +101,7 @@ npm run build
 # ------------------------------------------------------------
 log "ตั้งค่า systemd services..."
 
-$SUDO tee /etc/systemd/system/kaizen-web.service > /dev/null << UNIT
+$SUDO tee /etc/systemd/system/zenkai-web.service > /dev/null << UNIT
 [Unit]
 Description=Kaizen Web (Next.js)
 After=network.target docker.service
@@ -118,10 +118,10 @@ User=$(whoami)
 WantedBy=multi-user.target
 UNIT
 
-$SUDO tee /etc/systemd/system/kaizen-workers.service > /dev/null << UNIT
+$SUDO tee /etc/systemd/system/zenkai-workers.service > /dev/null << UNIT
 [Unit]
 Description=Kaizen Workers (BullMQ video+post)
-After=network.target docker.service kaizen-web.service
+After=network.target docker.service zenkai-web.service
 
 [Service]
 WorkingDirectory=$APP_DIR/apps/web
@@ -136,8 +136,8 @@ WantedBy=multi-user.target
 UNIT
 
 $SUDO systemctl daemon-reload
-$SUDO systemctl enable --now kaizen-web kaizen-workers
-$SUDO systemctl restart kaizen-web kaizen-workers
+$SUDO systemctl enable --now zenkai-web zenkai-workers
+$SUDO systemctl restart zenkai-web zenkai-workers
 
 # ------------------------------------------------------------
 # 8. สรุป
@@ -146,8 +146,8 @@ IP=$(hostname -I | awk '{print $1}')
 log "เสร็จแล้ว! 🎉"
 echo "  เว็บ:        http://$IP:$WEB_PORT  (login ด้วย BASIC_AUTH_USER/PASSWORD)"
 echo "  n8n:         http://$IP:5678"
-echo "  ดู log เว็บ:   journalctl -u kaizen-web -f"
-echo "  ดู log worker: journalctl -u kaizen-workers -f"
+echo "  ดู log เว็บ:   journalctl -u zenkai-web -f"
+echo "  ดู log worker: journalctl -u zenkai-workers -f"
 echo ""
 echo "  อัปเดตโค้ดรอบหน้า: รัน bash $APP_DIR/deploy/vps-setup.sh ซ้ำ"
 echo ""

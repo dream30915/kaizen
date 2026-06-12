@@ -91,7 +91,7 @@ const SECTIONS: Section[] = [
       { key: "R2_ACCOUNT_ID", label: "Account ID", placeholder: "..." },
       { key: "R2_ACCESS_KEY_ID", label: "Access Key ID", placeholder: "..." },
       { key: "R2_SECRET_ACCESS_KEY", label: "Secret Access Key", placeholder: "...", secret: true },
-      { key: "R2_BUCKET_NAME", label: "Bucket Name", placeholder: "kaizen-media" },
+      { key: "R2_BUCKET_NAME", label: "Bucket Name", placeholder: "zenkai-media" },
       { key: "R2_PUBLIC_URL", label: "Public URL", placeholder: "https://pub-xxx.r2.dev" },
     ],
   },
