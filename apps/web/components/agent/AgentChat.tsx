@@ -1,30 +1,38 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Loader2, Bot, User, Sparkles } from "lucide-react";
+import { Send, Loader2, Bot, User, Sparkles, Trash2 } from "lucide-react";
 import { clsx } from "clsx";
 
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-}
+interface Message { role: "user" | "assistant"; content: string; }
 
 const QUICK = [
-  "ช่วยเขียน caption สำหรับซาชิมิแซลมอนหน่อย",
-  "เมนูไหนควรโพสต์วันศุกร์?",
-  "hashtag ที่ดีสำหรับร้านอาหารญี่ปุ่นมีอะไรบ้าง",
-  "ช่วยคิดโปรโมชั่นช่วงเย็นหน่อย",
+  { icon: "🍣", text: "เขียน caption ซาชิมิแซลมอนน่ากินหน่อย" },
+  { icon: "📅", text: "ควรโพสต์คอนเทนต์อะไรวันศุกร์เย็น?" },
+  { icon: "#️⃣", text: "hashtag ที่ดีสำหรับร้านอาหารญี่ปุ่นในไทย" },
+  { icon: "🎯", text: "ไอเดียโปรโมชั่นบุฟเฟ่ต์ช่วงวีคเอนด์" },
 ];
+
+function TypingDots() {
+  return (
+    <div className="flex items-center gap-1 px-1 py-1">
+      {[0,1,2].map(i => (
+        <span key={i} className="w-2 h-2 bg-sumi-400 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+      ))}
+    </div>
+  );
+}
 
 export default function AgentChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [streaming, setStreaming] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, streaming]);
 
   async function send(text?: string) {
     const content = (text ?? input).trim();
@@ -34,67 +42,90 @@ export default function AgentChat() {
     const newMessages: Message[] = [...messages, { role: "user", content }];
     setMessages(newMessages);
     setLoading(true);
+    setStreaming("");
 
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 1000,
-          system: `คุณคือ Zenkai AI — ผู้ช่วยการตลาดของร้านอาหารญี่ปุ่นชื่อ Zenkai
-ความเชี่ยวชาญ: เขียน Caption ภาษาไทย, ไอเดียคอนเทนต์ TikTok/Reels, hashtag, โปรโมชั่น, กลยุทธ์โซเชียลมีเดีย
-สไตล์: ตอบเป็นภาษาไทย กระชับ ใช้ emoji เล็กน้อย มีตัวเลขและตัวอย่างจริงเสมอ
-ห้ามพูดว่า "ดิฉัน" หรือ "ผม" — ใช้ "Zenkai" แทน`,
-          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
-        }),
+        body: JSON.stringify({ messages: newMessages }),
       });
 
-      const data = await res.json();
-      const reply = data.content?.[0]?.text || "ขอโทษ ไม่สามารถตอบได้ตอนนี้";
-      setMessages(prev => [...prev, { role: "assistant", content: reply }]);
-    } catch {
-      setMessages(prev => [...prev, { role: "assistant", content: "⚠️ เชื่อมต่อไม่ได้ กรุณาลองใหม่" }]);
+      if (!res.ok || !res.body) throw new Error("ไม่สามารถเชื่อมต่อได้");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let full = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value);
+        full += chunk;
+        setStreaming(full);
+      }
+
+      setMessages(prev => [...prev, { role: "assistant", content: full }]);
+      setStreaming("");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "เกิดข้อผิดพลาด";
+      setMessages(prev => [...prev, { role: "assistant", content: `⚠️ ${msg}` }]);
+      setStreaming("");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="flex flex-col h-screen md:h-[calc(100vh-0px)] bg-washi-50">
+    <div className="flex flex-col h-screen bg-washi-50">
 
-      {/* Header */}
+      {/* ── Header ── */}
       <div className="bg-sumi-900 px-5 py-4 flex items-center gap-3 flex-shrink-0">
-        <div className="w-9 h-9 rounded-xl bg-beni-600 flex items-center justify-center">
+        <div className="w-9 h-9 rounded-xl bg-beni-600 flex items-center justify-center shadow-lg">
           <Sparkles className="w-4 h-4 text-white" />
         </div>
-        <div>
-          <h1 className="text-white font-bold text-base">Zenkai AI Agent</h1>
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <h1 className="text-white font-bold text-base">Zenkai AI Agent</h1>
+            <span className="text-[10px] bg-kin-600/30 text-kin-300 px-2 py-0.5 rounded-full font-medium tracking-wide">GPT-4o</span>
+          </div>
           <p className="text-sumi-400 text-xs">ผู้ช่วยการตลาดร้านอาหารญี่ปุ่น</p>
         </div>
-        <div className="ml-auto flex items-center gap-1.5">
-          <span className="w-2 h-2 bg-seiji-400 rounded-full animate-pulse" />
-          <span className="text-seiji-400 text-xs">พร้อมใช้งาน</span>
+        {messages.length > 0 && (
+          <button
+            onClick={() => { setMessages([]); setStreaming(""); }}
+            className="p-2 text-sumi-400 hover:text-white transition-colors"
+            title="ล้างแชท"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
+        <div className="flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 bg-seiji-400 rounded-full animate-pulse" />
+          <span className="text-seiji-400 text-xs">Online</span>
         </div>
       </div>
 
-      {/* Messages */}
+      {/* ── Messages ── */}
       <div className="flex-1 overflow-y-auto px-4 py-5 space-y-4">
-        {messages.length === 0 && (
-          <div className="text-center py-8">
-            <div className="w-14 h-14 rounded-2xl bg-sumi-900 flex items-center justify-center mx-auto mb-4">
-              <span className="text-white font-black text-2xl">全</span>
+        {messages.length === 0 && !streaming && (
+          <div className="text-center pt-6 pb-4">
+            <div className="w-16 h-16 rounded-2xl bg-sumi-900 flex items-center justify-center mx-auto mb-4 shadow-lg">
+              <span className="text-white font-black text-3xl leading-none">全</span>
             </div>
-            <p className="text-sumi-700 font-semibold mb-1">สวัสดีครับ!</p>
-            <p className="text-sumi-400 text-sm mb-6">ถามเรื่องคอนเทนต์ แคปชั่น หรือกลยุทธ์ได้เลย</p>
+            <p className="text-sumi-800 font-semibold mb-1">สวัสดีครับ! 🍣</p>
+            <p className="text-sumi-400 text-sm mb-6 leading-relaxed">
+              ถามเรื่องคอนเทนต์ แคปชั่น<br />โปรโมชั่น หรือกลยุทธ์โซเชียลได้เลย
+            </p>
             <div className="grid grid-cols-1 gap-2 max-w-xs mx-auto">
               {QUICK.map(q => (
                 <button
-                  key={q}
-                  onClick={() => send(q)}
-                  className="text-left text-sm px-4 py-2.5 bg-white border border-washi-200 rounded-xl hover:border-beni-300 hover:bg-beni-50 transition-colors text-sumi-700"
+                  key={q.text}
+                  onClick={() => send(q.text)}
+                  className="flex items-center gap-2.5 text-left text-sm px-4 py-3 bg-white border border-washi-200 rounded-xl hover:border-beni-300 hover:bg-beni-50 transition-all group shadow-sm"
                 >
-                  {q}
+                  <span className="text-base">{q.icon}</span>
+                  <span className="text-sumi-700 group-hover:text-beni-700">{q.text}</span>
                 </button>
               ))}
             </div>
@@ -102,53 +133,68 @@ export default function AgentChat() {
         )}
 
         {messages.map((m, i) => (
-          <div key={i} className={clsx("flex gap-3", m.role === "user" ? "flex-row-reverse" : "flex-row")}>
+          <div key={i} className={clsx("flex gap-2.5", m.role === "user" ? "flex-row-reverse" : "flex-row")}>
             <div className={clsx(
-              "w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5",
+              "w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm",
               m.role === "user" ? "bg-beni-600" : "bg-sumi-900"
             )}>
-              {m.role === "user"
-                ? <User className="w-4 h-4 text-white" />
-                : <Bot className="w-4 h-4 text-white" />}
+              {m.role === "user" ? <User className="w-3.5 h-3.5 text-white" /> : <Bot className="w-3.5 h-3.5 text-white" />}
             </div>
             <div className={clsx(
-              "max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap",
+              "max-w-[82%] px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap shadow-sm",
               m.role === "user"
                 ? "bg-beni-600 text-white rounded-tr-sm"
-                : "bg-white border border-washi-200 text-sumi-800 rounded-tl-sm shadow-sm"
+                : "bg-white border border-washi-200 text-sumi-800 rounded-tl-sm"
             )}>
               {m.content}
             </div>
           </div>
         ))}
 
-        {loading && (
-          <div className="flex gap-3">
-            <div className="w-8 h-8 rounded-xl bg-sumi-900 flex items-center justify-center flex-shrink-0">
-              <Bot className="w-4 h-4 text-white" />
+        {/* Streaming response */}
+        {streaming && (
+          <div className="flex gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-sumi-900 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm">
+              <Bot className="w-3.5 h-3.5 text-white" />
             </div>
-            <div className="bg-white border border-washi-200 px-4 py-3 rounded-2xl rounded-tl-sm shadow-sm">
-              <Loader2 className="w-4 h-4 text-sumi-400 animate-spin" />
+            <div className="max-w-[82%] px-4 py-3 bg-white border border-washi-200 rounded-2xl rounded-tl-sm text-sm leading-relaxed text-sumi-800 shadow-sm whitespace-pre-wrap">
+              {streaming}
+              <span className="inline-block w-0.5 h-4 bg-beni-400 ml-0.5 animate-pulse align-middle" />
             </div>
           </div>
         )}
+
+        {/* Loading dots (before first stream chunk) */}
+        {loading && !streaming && (
+          <div className="flex gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-sumi-900 flex items-center justify-center flex-shrink-0">
+              <Bot className="w-3.5 h-3.5 text-white" />
+            </div>
+            <div className="bg-white border border-washi-200 px-4 py-3 rounded-2xl rounded-tl-sm shadow-sm">
+              <TypingDots />
+            </div>
+          </div>
+        )}
+
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
-      <div className="px-4 pb-4 pt-2 bg-white border-t border-washi-200 flex-shrink-0 mb-16 md:mb-0">
-        <div className="flex gap-2">
-          <input
+      {/* ── Input ── */}
+      <div className="px-4 pb-safe pt-2 bg-white border-t border-washi-200 flex-shrink-0 pb-20 md:pb-4">
+        <div className="flex gap-2 items-end">
+          <textarea
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), send())}
             placeholder="ถามเรื่องคอนเทนต์ แคปชั่น โปรโมชั่น..."
-            className="flex-1 bg-washi-50 border border-washi-200 rounded-xl px-4 py-3 text-sm text-sumi-800 placeholder-sumi-400 focus:outline-none focus:border-beni-400 transition-colors"
+            rows={1}
+            className="flex-1 bg-washi-50 border border-washi-200 rounded-xl px-4 py-3 text-sm text-sumi-800 placeholder-sumi-400 focus:outline-none focus:border-beni-400 transition-colors resize-none"
+            style={{ minHeight: 44, maxHeight: 120 }}
           />
           <button
             onClick={() => send()}
             disabled={!input.trim() || loading}
-            className="w-11 h-11 bg-beni-600 hover:bg-beni-500 disabled:opacity-40 text-white rounded-xl flex items-center justify-center transition-all flex-shrink-0"
+            className="w-11 h-11 bg-beni-600 hover:bg-beni-500 disabled:opacity-40 text-white rounded-xl flex items-center justify-center transition-all flex-shrink-0 shadow-sm"
           >
             <Send className="w-4 h-4" />
           </button>
