@@ -7,6 +7,7 @@
 
 import axios from "axios";
 import OpenAI from "openai";
+import { buildProfessionalPrompt, VideoStyle } from "./prompts";
 
 const BASE = "https://api.phaya.io/api/v1";
 const api = () => axios.create({
@@ -29,26 +30,33 @@ async function poll(endpoint: string, jobId: string, max = 120, ms = 5000): Prom
   throw new Error("Phaya job timed out");
 }
 
-// ─── GPT-4o: Cinematic food video prompt ─────────────────────
-async function buildPrompt(menuName: string, menuNameEn?: string, description?: string): Promise<string> {
-  try {
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const dish = menuNameEn || menuName;
-    const { choices } = await openai.chat.completions.create({
-      model: "gpt-4o", max_tokens: 150, temperature: 0.7,
-      messages: [{
-        role: "system",
-        content: "You are a luxury Japanese restaurant food video director. Write a 40-70 word cinematic video prompt for AI video generation. Describe motion (chopsticks lifting, steam rising, sauce dripping), camera move (slow push-in, macro), lighting (shallow DOF, warm bokeh, golden rim). English only. Output prompt only, no extra text.",
-      }, {
-        role: "user",
-        content: `Dish: ${dish}${description ? `\nDetails: ${description}` : ""}`,
-      }],
-    });
-    return choices[0].message.content?.trim() ||
-      `${dish}, Japanese restaurant cinematic close-up, chopsticks lifting gently, steam rising, shallow depth of field, warm golden bokeh, slow push-in`;
-  } catch {
-    return `${menuName}${menuNameEn ? ` ${menuNameEn}` : ""}, Japanese restaurant, cinematic food photography, steam rising, appetizing close-up, shallow DOF, warm lighting`;
+// ─── Professional Prompt Builder ─────────────────────────────
+// ใช้ preset library แทน GPT-4o เพื่อความสม่ำเสมอและ quality ระดับมืออาชีพ
+// GPT-4o ยังถูกใช้ถ้า ENABLE_GPT_PROMPT=true ใน .env (optional enhancement)
+async function buildPrompt(
+  menuName: string,
+  menuNameEn?: string,
+  description?: string,
+  category?: string,
+  style?: VideoStyle
+): Promise<string> {
+  // ลอง enhance ด้วย GPT-4o ก่อน (ถ้าเปิดไว้)
+  if (process.env.ENABLE_GPT_PROMPT === "true" && process.env.OPENAI_API_KEY) {
+    try {
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const base = buildProfessionalPrompt({ menuName, menuNameEn, description, category, style });
+      const { choices } = await openai.chat.completions.create({
+        model: "gpt-4o", max_tokens: 120, temperature: 0.5,
+        messages: [{
+          role: "system",
+          content: "You are a food video director. Enhance this AI video prompt to be more specific and cinematic. Keep under 100 words. English only. Output enhanced prompt only.",
+        }, { role: "user", content: base }],
+      });
+      return choices[0].message.content?.trim() || base;
+    } catch { /* fallback to preset */ }
   }
+  // Default: ใช้ preset library (research-based, consistent quality)
+  return buildProfessionalPrompt({ menuName, menuNameEn, description, category, style });
 }
 
 // ─── Tier 1: Seedance Pro (6 credits / 8s) ──────────────────
@@ -96,12 +104,12 @@ export async function generateFoodVideoPhaya(params: {
   menuNameEn?: string;
   description?: string;
   category?: string;
+  style?: VideoStyle;
   tier: "fast" | "quality" | "premium";
 }): Promise<string> {
-  const { imageUrl, menuName, menuNameEn, description, tier } = params;
+  const { imageUrl, menuName, menuNameEn, description, category, style, tier } = params;
 
-  // GPT-4o สร้าง prompt ระดับมืออาชีพ
-  const prompt = await buildPrompt(menuName, menuNameEn, description);
+  const prompt = await buildPrompt(menuName, menuNameEn, description, category, style);
   console.log(`[phaya] tier=${tier} prompt="${prompt.substring(0, 80)}..."`);
 
   try {

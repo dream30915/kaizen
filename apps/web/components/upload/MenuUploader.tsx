@@ -8,6 +8,7 @@ import {
   Sparkles, Film, Send, ChevronRight,
   X, Plus, Zap, Star, Crown, ExternalLink,
 } from "lucide-react";
+import { PROMPT_PRESETS, type VideoStyle } from "@/lib/prompts";
 import { clsx } from "clsx";
 import Link from "next/link";
 
@@ -20,6 +21,7 @@ interface MenuFormData {
   postTo: string[];
   scheduleType: "now" | "schedule";
   scheduleAt?: string;
+  videoStyle: VideoStyle;
 }
 
 type JobStatus =
@@ -74,7 +76,7 @@ export default function MenuUploader() {
   const [form, setForm] = useState<MenuFormData>({
     menuName: "", menuNameEn: "", price: "", description: "",
     videoTier: "tier1", postTo: ["tiktok", "instagram"],
-    scheduleType: "now",
+    scheduleType: "now", videoStyle: "cinematic" as VideoStyle,
   });
 
   const onDrop = useCallback((accepted: File[]) => {
@@ -130,7 +132,7 @@ export default function MenuUploader() {
     setFiles([]); setPreviews([]); setStatus("idle");
     setJobId(null); setGeneratedScript(""); setStep(1);
     setForm({ menuName: "", menuNameEn: "", price: "", description: "",
-      videoTier: "tier1", postTo: ["tiktok", "instagram"], scheduleType: "now" });
+      videoTier: "tier1", postTo: ["tiktok", "instagram"], scheduleType: "now", videoStyle: "cinematic" });
   };
 
   // ── Done state ──────────────────────────────────────────────
@@ -381,6 +383,27 @@ export default function MenuUploader() {
                 </button>
               );
             })}
+          </div>
+
+          {/* Video Style */}
+          <div>
+            <label className="block text-xs font-bold text-sumi-600 mb-3 uppercase tracking-widest">สไตล์วิดีโอ</label>
+            <div className="grid grid-cols-2 gap-2">
+              {PROMPT_PRESETS.map(p => {
+                const active = form.videoStyle === p.style;
+                return (
+                  <button key={p.style} onClick={() => setForm(f => ({ ...f, videoStyle: p.style }))}
+                    className={clsx("flex items-start gap-2.5 p-3 rounded-xl border-2 text-left transition-all",
+                      active ? "border-beni-400 bg-beni-50" : "border-washi-200 bg-white hover:border-washi-300")}>
+                    <span className="text-lg flex-shrink-0">{p.icon}</span>
+                    <div>
+                      <p className={clsx("text-xs font-bold", active ? "text-beni-700" : "text-sumi-700")}>{p.label}</p>
+                      <p className="text-[10px] text-sumi-400 mt-0.5 leading-tight">{p.desc}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Credit info */}
