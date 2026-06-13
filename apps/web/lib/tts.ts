@@ -68,7 +68,7 @@ export async function generateVoiceoverPhaya(text: string): Promise<Buffer> {
     return generateVoiceover(text, "th");
   }
   try {
-    const audioUrl = await phayaTTS({ text: text.substring(0, 500) });
+    const audioUrl = await phayaTTS(text.substring(0, 500));
     // Download audio to buffer
     return new Promise((resolve, reject) => {
       https.get(audioUrl, (res) => {

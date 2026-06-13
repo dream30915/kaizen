@@ -91,7 +91,7 @@ const worker = new Worker<VideoJobData>(
             .filter(Boolean)
             .join(" ")
             .substring(0, 500);
-          const audioUrl = await phayaTTS({ text: speech });
+          const audioUrl = await phayaTTS(speech );
           finalVideoUrl = await phayaMergeAudioVideo({
             videoUrl: videoResult.url,
             audioUrl,
