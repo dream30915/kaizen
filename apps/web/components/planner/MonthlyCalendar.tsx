@@ -256,7 +256,7 @@ date ตั้งแต่ 1 ถึง ${daysInMonth}
               </div>
               <div className="bg-beni-50 border border-beni-100 rounded-2xl p-4">
                 <p className="text-xs font-bold text-beni-400 uppercase tracking-widest mb-2">Hook เปิดคลิป</p>
-                <p className="text-sm text-sumi-800 font-medium leading-relaxed">"{selected.hook}"</p>
+                <p className="text-sm text-sumi-800 font-medium leading-relaxed">&ldquo;{selected.hook}&rdquo;</p>
               </div>
             </div>
 
