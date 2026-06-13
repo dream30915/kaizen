@@ -87,7 +87,7 @@ const worker = new Worker<VideoJobData>(
       await job.updateProgress(60);
       if (ENABLE_TTS && process.env.PHAYA_API_KEY) {
         try {
-          const speech = [content.hook, content.body, content.cta]
+          const speech = [content.hook, content.caption, content.cta]
             .filter(Boolean)
             .join(" ")
             .substring(0, 500);

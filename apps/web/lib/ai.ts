@@ -1,175 +1,116 @@
 /**
- * AI Content Generation — structured JSON output
- *
- * เดิม: ให้ LLM ตอบเป็น text แบบมีหัวข้อ (HOOK:/CAPTION:) แล้วใช้ string parsing แกะ
- * ซึ่งเปราะมาก (บรรทัดแรกของ script คือหัวข้อ ไม่ใช่เนื้อหา ทำให้ text บนคลิปผิด)
- *
- * ใหม่: บังคับ JSON ด้วย response_format แล้ว parse ตรง ๆ
+ * AI Caption Generator
+ * Primary: Claude Sonnet 4.6 (Anthropic) — Best creative writing 2026
+ * Fallback: GPT-4o (OpenAI) — ถ้า Anthropic credits หมด
  */
-
+import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
 export interface MenuContent {
-  hook: string; // 3 วิแรก — ขึ้นเป็น text บนคลิป
-  body: string; // ใจความหลักของ script
-  cta: string; // call to action
-  caption: string; // caption สำหรับโพสต์
-  hashtags: string; // "#tag1 #tag2 ..."
+  hook: string;
+  caption: string;
+  hashtags: string;
+  cta: string;
 }
 
-interface ScriptInput {
+const SYSTEM_PROMPT = `คุณคือผู้เชี่ยวชาญ Social Media Marketing สำหรับร้านอาหารญี่ปุ่นระดับ Premium ชื่อ "Zenkai"
+สไตล์การเขียน: อบอุ่น น่ากิน ภาษาไทยสมัยใหม่ มี emoji พอดี ไม่มากเกิน
+ต้องสร้าง viral content ที่ทำให้คนอยากมากิน หยุดดูวิดีโอ และแชร์ต่อ
+
+กฎ:
+- Hook: ต้องดึงดูดใน 3 วินาทีแรก ใช้คำถาม ตัวเลข หรือ surprise
+- Caption: 2-3 ประโยค กระชับ อ่านง่าย น่ากิน
+- Hashtags: 8-12 อัน ผสมไทย-อังกฤษ เน้น reach
+- CTA: กระตุ้นให้ comment/share/save
+ตอบเป็น JSON เท่านั้น ไม่มี markdown`;
+
+const USER_PROMPT = (menuName: string, menuNameEn: string, price: string, description: string, category: string) =>
+  `สร้าง caption สำหรับ:
+เมนู: ${menuName}${menuNameEn ? ` (${menuNameEn})` : ""}
+ราคา: ${price ? `฿${price}` : "ไม่ระบุ"}
+หมวด: ${category || "อาหารญี่ปุ่น"}
+${description ? `จุดเด่น: ${description}` : ""}
+
+ตอบ JSON รูปแบบนี้เท่านั้น:
+{
+  "hook": "ประโยค hook ดึงดูด",
+  "caption": "caption 2-3 ประโยค",
+  "hashtags": "#แฮชแท็ก #รวมกัน",
+  "cta": "call to action"
+}`;
+
+// ─── Claude Sonnet 4.6 (Primary) ──────────────────────────────
+async function generateWithClaude(params: {
+  menuName: string; menuNameEn: string; price: string;
+  description: string; category: string;
+}): Promise<MenuContent> {
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const msg = await anthropic.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 500,
+    system: SYSTEM_PROMPT,
+    messages: [{
+      role: "user",
+      content: USER_PROMPT(params.menuName, params.menuNameEn, params.price, params.description, params.category),
+    }],
+  });
+  const text = (msg.content[0] as { text: string }).text.trim();
+  return JSON.parse(text.replace(/```json|```/g, "").trim());
+}
+
+// ─── GPT-4o (Fallback) ────────────────────────────────────────
+async function generateWithGPT(params: {
+  menuName: string; menuNameEn: string; price: string;
+  description: string; category: string;
+}): Promise<MenuContent> {
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const res = await openai.chat.completions.create({
+    model: "gpt-4o",
+    max_tokens: 500,
+    temperature: 0.8,
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: USER_PROMPT(params.menuName, params.menuNameEn, params.price, params.description, params.category) },
+    ],
+  });
+  return JSON.parse(res.choices[0].message.content || "{}");
+}
+
+// ─── Main: Claude first, GPT fallback ────────────────────────
+export async function generateMenuContent(params: {
   menuName: string;
   menuNameEn?: string;
   price?: string;
   description?: string;
-}
-
-const DEFAULT_HASHTAGS = "#อาหารญี่ปุ่น #Japanesefood #อร่อยบอกต่อ #ร้านอาหารญี่ปุ่น";
-
-// ----------------------------------------------------------------
-// generateMenuContent — สร้างคอนเทนต์เป็น structured object
-// ----------------------------------------------------------------
-export async function generateMenuContent(input: ScriptInput): Promise<MenuContent> {
-  const { menuName, menuNameEn, price, description } = input;
-
-  const prompt = `คุณคือ copywriter ร้านอาหารญี่ปุ่น เชี่ยวชาญเขียนคอนเทนต์ TikTok / Instagram Reels
-
-ข้อมูลเมนู:
-- ชื่อ: ${menuName}${menuNameEn ? ` (${menuNameEn})` : ""}
-- ราคา: ${price ? `${price} บาท` : "ไม่ระบุ"}
-- รายละเอียด: ${description || "ไม่มี"}
-
-สร้างคอนเทนต์สำหรับคลิปสั้น 15-30 วินาที ภาษาไทยกระชับ เหมาะกับคนไทยอายุ 18-35 ปี
-
-ตอบเป็น JSON object เท่านั้น โครงสร้างนี้เป๊ะ ๆ:
-{
-  "hook": "ประโยคเปิด 3 วิแรก ดึงดูดมาก สั้นไม่เกิน 60 ตัวอักษร (จะขึ้นเป็นข้อความบนคลิป)",
-  "body": "ใจความหลัก 1-2 ประโยค",
-  "cta": "call to action 1 ประโยค",
-  "caption": "ข้อความสำหรับโพสต์ 2-3 ประโยค",
-  "hashtags": "#แฮชแท็ก คั่นด้วยช่องว่าง 5-8 อัน"
-}`;
-
-  const res = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-      { role: "system", content: "ตอบเป็น JSON object ที่ valid เท่านั้น ห้ามมีข้อความอื่น" },
-      { role: "user", content: prompt },
-    ],
-    response_format: { type: "json_object" },
-    max_tokens: 600,
-    temperature: 0.8,
-  });
-
-  const raw = res.choices[0].message.content || "{}";
-  let data: Record<string, unknown> = {};
-  try {
-    data = JSON.parse(raw);
-  } catch {
-    // ถ้า parse ไม่ได้จริง ๆ (ไม่ควรเกิดกับ json_object mode) ใช้ fallback
-  }
-
-  return {
-    hook: str(data.hook) || menuName,
-    body: str(data.body),
-    cta: str(data.cta),
-    caption: str(data.caption) || menuName,
-    hashtags: normalizeHashtags(data.hashtags),
+  category?: string;
+}): Promise<MenuContent> {
+  const p = {
+    menuName: params.menuName,
+    menuNameEn: params.menuNameEn || "",
+    price: params.price || "",
+    description: params.description || "",
+    category: params.category || "อาหารญี่ปุ่น",
   };
-}
 
-function str(v: unknown): string {
-  return typeof v === "string" ? v.trim() : "";
-}
-
-function normalizeHashtags(h: unknown): string {
-  if (Array.isArray(h)) {
-    return h
-      .map((t) => String(t).trim())
-      .filter(Boolean)
-      .map((t) => (t.startsWith("#") ? t : `#${t}`))
-      .join(" ");
-  }
-  if (typeof h === "string" && h.trim()) return h.trim();
-  return DEFAULT_HASHTAGS;
-}
-
-// ----------------------------------------------------------------
-// generateMenuScript — wrapper สำหรับเก็บลง DB (คอลัมน์ script เดิม)
-// เก็บเป็น JSON string เพื่อไม่ต้องแก้ schema
-// ----------------------------------------------------------------
-export async function generateMenuScript(input: ScriptInput): Promise<string> {
-  const content = await generateMenuContent(input);
-  return JSON.stringify(content);
-}
-
-// ----------------------------------------------------------------
-// parseMenuContent — แปลง script จาก DB กลับเป็น object
-// รองรับทั้ง JSON (job ใหม่) และ text แบบเก่า (job ที่ค้างใน DB)
-// ----------------------------------------------------------------
-export function parseMenuContent(script: string): MenuContent {
-  // 1) ลอง parse เป็น JSON ก่อน (format ใหม่)
-  try {
-    const data = JSON.parse(script);
-    if (data && typeof data === "object" && (data.hook || data.caption)) {
-      return {
-        hook: str(data.hook),
-        body: str(data.body),
-        cta: str(data.cta),
-        caption: str(data.caption),
-        hashtags: normalizeHashtags(data.hashtags),
-      };
+  // ลอง Claude ก่อน — ดีกว่า GPT-4o สำหรับ creative Thai copy
+  if (process.env.ANTHROPIC_API_KEY) {
+    try {
+      console.log("[ai] Using Claude Sonnet 4.6");
+      return await generateWithClaude(p);
+    } catch (err) {
+      console.warn("[ai] Claude failed, falling back to GPT-4o:", err instanceof Error ? err.message : err);
     }
-  } catch {
-    // ไม่ใช่ JSON — เป็น script แบบเก่า
   }
 
-  // 2) Legacy text format (HOOK:/BODY:/CAPTION:/HASHTAGS:)
-  const lines = script.split("\n");
-  const section = (label: string): string => {
-    const idx = lines.findIndex((l) => l.toUpperCase().includes(label));
-    if (idx >= 0) {
-      for (let i = idx + 1; i < lines.length; i++) {
-        const t = lines[i].replace(/^\[|\]$/g, "").trim();
-        if (t) return t;
-      }
-    }
-    return "";
-  };
-
-  return {
-    hook: section("HOOK") || lines.find((l) => l.trim())?.trim().substring(0, 80) || "",
-    body: section("BODY"),
-    cta: section("CTA"),
-    caption: section("CAPTION") || script.substring(0, 200),
-    hashtags: section("HASHTAG") || DEFAULT_HASHTAGS,
-  };
+  // Fallback: GPT-4o
+  console.log("[ai] Using GPT-4o");
+  return await generateWithGPT(p);
 }
 
-// ----------------------------------------------------------------
-// generateMenuCaption — caption สั้นสำหรับ LINE/Facebook (คงเดิม)
-// ----------------------------------------------------------------
-export async function generateMenuCaption(input: ScriptInput): Promise<string> {
-  const { menuName, menuNameEn, price, description } = input;
-
-  const res = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-      {
-        role: "user",
-        content: `เขียน caption สั้น 2-3 ประโยคสำหรับ Facebook/LINE ร้านอาหารญี่ปุ่น
-เมนู: ${menuName}${menuNameEn ? ` (${menuNameEn})` : ""}
-ราคา: ${price ? `${price} บาท` : ""}
-รายละเอียด: ${description || ""}
-
-ตอบเฉพาะ caption เท่านั้น ไม่ต้องอธิบาย`,
-      },
-    ],
-    max_tokens: 150,
-    temperature: 0.7,
-  });
-
-  return res.choices[0].message.content || "";
+// ─── Backward compatibility aliases ──────────────────────────
+export const generateMenuScript = generateMenuContent;
+export function parseMenuContent(json: string): MenuContent {
+  try { return JSON.parse(json); }
+  catch { return { hook: "", caption: json, hashtags: "", cta: "" }; }
 }

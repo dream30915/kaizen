@@ -6,6 +6,7 @@
 
 import axios from "axios";
 import OpenAI from "openai";
+import { generateHailuoVideo, generateHailuoStandard } from "./fal";
 
 const BASE_URL = "https://api.phaya.io/api/v1";
 const api = () =>
@@ -133,15 +134,27 @@ export async function generateFoodVideoPhaya(params: {
   console.log(`[phaya] Tier: ${tier} | Prompt: ${prompt}`);
 
   if (tier === "fast") {
-    // Seedance Pro: photorealistic AI video, 6 credits
+    // Hailuo Standard 768p — $0.28/6s, ถูกสุด, คุณภาพดี
+    if (process.env.FAL_API_KEY) {
+      try { return await generateHailuoStandard({ imageUrl, prompt }); }
+      catch (e) { console.warn("[phaya] Hailuo Standard failed, fallback Seedance:", e); }
+    }
     return generateSeedancePro(imageUrl, prompt);
   }
   if (tier === "quality") {
-    // Veo 3.1: Google best quality, 15 credits
-    return generateVeo31(imageUrl, prompt);
+    // Hailuo Pro 1080p — $0.49/6s, คุณภาพสูง
+    if (process.env.FAL_API_KEY) {
+      try { return await generateHailuoVideo({ imageUrl, prompt }); }
+      catch (e) { console.warn("[phaya] Hailuo Pro failed, fallback Seedance:", e); }
+    }
+    return generateSeedancePro(imageUrl, prompt);
   }
-  // Premium: Veo 3.1 with enhanced cinematic prompt
-  const premiumPrompt = prompt + ", ultra cinematic, award-winning food photography, Michelin star presentation, magazine cover quality";
+  // Premium: Veo 3.1 — Google AI สูงสุด
+  const premiumPrompt = prompt + ", ultra cinematic, award-winning food photography, Michelin star presentation";
+  if (process.env.FAL_API_KEY) {
+    try { return await generateHailuoVideo({ imageUrl, prompt: premiumPrompt }); }
+    catch (e) { console.warn("[phaya] Hailuo Premium failed, fallback Veo:", e); }
+  }
   return generateVeo31(imageUrl, premiumPrompt);
 }
 
